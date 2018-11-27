@@ -315,15 +315,15 @@ class QLearner(object):
 
       if not self.model_initialized:
         initialize_interdependent_variables(self.session, tf.global_variables(),
-                                            {obs_t_ph: s_batch, obs_tp1_ph: sp_batch, })
+                                            {self.obs_t_ph: s_batch, self.obs_tp1_ph: sp_batch, })
         self.model_initialized = True
 
-      feed_dict = {obs_t_ph:  s_batch,
-                   act_t_ph: a_batch,
-                   rew_t_ph: r_batch,
-                   obs_tp1_ph: sp_batch,
-                   done_mask_ph: done_mask_batch,
-                   learning_rate: self.optimizer_spec.lr_schedule.value(self.t)}
+      feed_dict = {self.obs_t_ph:  s_batch,
+                   self.act_t_ph: a_batch,
+                   self.rew_t_ph: r_batch,
+                   self.obs_tp1_ph: sp_batch,
+                   self.done_mask_ph: done_mask_batch,
+                   self.learning_rate: self.optimizer_spec.lr_schedule.value(self.t)}
       self.session.run(self.train_fn, feed_dict=feed_dict)
 
       num_param_updates += 1
