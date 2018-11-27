@@ -250,7 +250,7 @@ class QLearner(object):
       action = self.env.action_space.sample()
     else:
       # chose action according to current Q and exploration
-      if not double_q:
+      if not self.double_q:
         action_values = self.session.run(self.q, feed_dict={obs_t_ph: [q_input]})[0]
         action = np.argmax(action_values)
       else:
