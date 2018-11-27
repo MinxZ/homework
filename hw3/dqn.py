@@ -251,10 +251,10 @@ class QLearner(object):
     else:
       # chose action according to current Q and exploration
       if not double_q:
-        action_values = session.run(self.q, feed_dict={obs_t_ph: [q_input]})[0]
+        action_values = self.session.run(self.q, feed_dict={obs_t_ph: [q_input]})[0]
         action = np.argmax(action_values)
       else:
-        action_values = session.run(self.target_q, feed_dict={obs_t_ph: [q_input]})[0]
+        action_values = self.session.run(self.target_q, feed_dict={obs_t_ph: [q_input]})[0]
         action = np.argmax(action_values)
 
     # perform action in env
@@ -314,7 +314,7 @@ class QLearner(object):
       s_batch, a_batch, r_batch, sp_batch, done_mask_batch = self.replay_buffer.sample(self.batch_size)
 
       if not self.model_initialized:
-        initialize_interdependent_variables(session, tf.global_variables(),
+        initialize_interdependent_variables(self.session, tf.global_variables(),
                                             {obs_t_ph: s_batch, obs_tp1_ph: sp_batch, })
         self.model_initialized = True
 
@@ -324,11 +324,11 @@ class QLearner(object):
                    obs_tp1_ph: sp_batch,
                    done_mask_ph: done_mask_batch,
                    learning_rate: self.optimizer_spec.lr_schedule.value(self.t)}
-      session.run(self.train_fn, feed_dict=feed_dict)
+      self.session.run(self.train_fn, feed_dict=feed_dict)
 
       num_param_updates += 1
       if num_param_updates % target_update_freq == 0:
-        session.run(update_target_fn)
+        self.session.run(update_target_fn)
         num_param_updates = 0
       self.num_param_updates += 1
 
