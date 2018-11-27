@@ -165,14 +165,27 @@ class QLearner(object):
 
     # YOUR CODE HERE
 
-    self.q = q_func(obs_t_float, self.num_actions, scope="q_func", reuse=False)
-    self.target_q = q_func(obs_tp1_float, self.num_actions, scope="target_q_func", reuse=False)
-    Q_samp = self.rew_t_ph + (1 - self.done_mask_ph) * gamma * tf.reduce_max(self.target_q, axis=1)
-    Q_s = tf.reduce_sum(self.q * tf.one_hot(self.act_t_ph, self.num_actions), axis=1)
-    self.total_error = tf.reduce_mean(huber_loss(Q_samp - Q_s))
-    q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func')
-    target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q_func')
+    # current and next obs' q values
+    q_t = q_func(obs_t_float, self.num_actions, scope="q_func", reuse=False)
+    q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="q_func")
 
+    q_tp1 = q_func(obs_tp1_float, self.num_actions, scope="target_q_func", reuse=False)
+    target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_q_func")
+
+    self.greedy_action = tf.argmax(q_t, axis=1)
+    q_t_act = tf.reduce_sum(q_t * tf.one_hot(self.act_t_ph, depth=self.num_actions), axis=1)
+
+    if not double_q:
+      # Vanilla DQN
+      # next state Q-value, rew_t_ph or rew_t_ph + gamma * q_tp1 depending on done_mask_ph
+      target = self.rew_t_ph + (1.0 - self.done_mask_ph) * gamma * tf.reduce_max(q_tp1, axis=1)
+    else:
+      # Double DQN
+      q_next_target = q_func(obs_tp1_float, self.num_actions, scope="q_func", reuse=True)
+      best_q = tf.reduce_sum(q_tp1 * tf.one_hot(tf.argmax(q_next_target, axis=1), depth=self.num_actions), axis=1)
+      target = self.rew_t_ph + (1.0 - self.done_mask_ph) * gamma * best_q
+
+    self.total_error = huber_loss(target - q_t_act)
     ######
 
     # construct optimization op (with gradient clipping)
@@ -244,18 +257,14 @@ class QLearner(object):
     # YOUR CODE HERE
     # replay memory stuff
     idx = self.replay_buffer.store_frame(self.last_obs)
-    q_input = self.replay_buffer.encode_recent_observation()
 
-    if (np.random.random() > self.exploration.value(self.t)) or not self.model_initialized:
+    if random.random() > self.exploration.value(self.t) or not self.model_initialized:
       action = self.env.action_space.sample()
     else:
       # chose action according to current Q and exploration
-      if not self.double_q:
-        action_values = self.session.run(self.q, feed_dict={obs_t_ph: [q_input]})[0]
-        action = np.argmax(action_values)
-      else:
-        action_values = self.session.run(self.target_q, feed_dict={obs_t_ph: [q_input]})[0]
-        action = np.argmax(action_values)
+      # restore obs
+      input_obs = self.replay_buffer.encode_recent_observation()
+      action = self.session.run(self.greedy_action, {self.obs_t_ph: [input_obs]})
 
     # perform action in env
     new_state, reward, done, info = self.env.step(action)
@@ -311,25 +320,32 @@ class QLearner(object):
       #####
 
       # YOUR CODE HERE
-      s_batch, a_batch, r_batch, sp_batch, done_mask_batch = self.replay_buffer.sample(self.batch_size)
+      # sample a batch
+      obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = self.replay_buffer.sample(self.batch_size)
 
+      # initialize the model
       if not self.model_initialized:
-        initialize_interdependent_variables(self.session, tf.global_variables(),
-                                            {self.obs_t_ph: s_batch, self.obs_tp1_ph: sp_batch, })
+        initialize_interdependent_variables(self.session,
+                                            tf.global_variables(),
+                                            {self.obs_t_ph: obs_batch,
+                                             self.obs_tp1_ph: next_obs_batch, })
         self.model_initialized = True
 
-      feed_dict = {self.obs_t_ph:  s_batch,
-                   self.act_t_ph: a_batch,
-                   self.rew_t_ph: r_batch,
-                   self.obs_tp1_ph: sp_batch,
-                   self.done_mask_ph: done_mask_batch,
-                   self.learning_rate: self.optimizer_spec.lr_schedule.value(self.t)}
+      feed_dict = {
+          self.obs_t_ph: obs_batch,
+          self.act_t_ph: act_batch,
+          self.rew_t_ph: rew_batch,
+          self.obs_tp1_ph: next_obs_batch,
+          self.done_mask_ph: done_mask,
+          self.learning_rate: self.optimizer_spec.lr_schedule.value(self.t),
+      }
       self.session.run(self.train_fn, feed_dict=feed_dict)
 
-      # 4. Periodically update the target network
+      # update the target network
       if self.num_param_updates % self.target_update_freq == 0:
         self.session.run(self.update_target_fn)
-      # YOUR CODE HERE
+      #####
+
       self.num_param_updates += 1
 
     self.t += 1
