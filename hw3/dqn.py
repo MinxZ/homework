@@ -326,6 +326,7 @@ class QLearner(object):
                    self.learning_rate: self.optimizer_spec.lr_schedule.value(self.t)}
       self.session.run(self.train_fn, feed_dict=feed_dict)
 
+      num_param_updates = self.num_param_updates
       num_param_updates += 1
       if num_param_updates % target_update_freq == 0:
         self.session.run(update_target_fn)
