@@ -326,11 +326,10 @@ class QLearner(object):
                    self.learning_rate: self.optimizer_spec.lr_schedule.value(self.t)}
       self.session.run(self.train_fn, feed_dict=feed_dict)
 
-      num_param_updates = self.num_param_updates
-      num_param_updates += 1
-      if num_param_updates % target_update_freq == 0:
-        self.session.run(update_target_fn)
-        num_param_updates = 0
+      # 4. Periodically update the target network
+      if self.num_param_updates % self.target_update_freq == 0:
+        self.session.run(self.update_target_fn)
+      # YOUR CODE HERE
       self.num_param_updates += 1
 
     self.t += 1
