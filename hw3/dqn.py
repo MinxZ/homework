@@ -6,11 +6,11 @@ import time
 import uuid
 from collections import namedtuple
 
+import gym.spaces
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 
-import gym.spaces
 from dqn_utils import *
 
 OptimizerSpec = namedtuple(
@@ -265,7 +265,7 @@ class QLearner(object):
     self.last_obs = new_state
 
     if done:
-      self.last_obs = env.reset()
+      self.last_obs = self.env.reset()
 
   def update_model(self):
     # 3. Perform experience replay and train the network.
