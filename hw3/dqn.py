@@ -258,7 +258,7 @@ class QLearner(object):
     # replay memory stuff
     idx = self.replay_buffer.store_frame(self.last_obs)
 
-    if random.random() > self.exploration.value(self.t) or not self.model_initialized:
+    if random.random() < self.exploration.value(self.t) or not self.model_initialized:
       action = self.env.action_space.sample()
     else:
       # chose action according to current Q and exploration
